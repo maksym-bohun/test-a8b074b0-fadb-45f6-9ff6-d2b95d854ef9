@@ -1,12 +1,17 @@
 import { Controller, Get } from '@nestjs/common';
-import { AppService } from './app.service';
+import { HealthCheck, HealthCheckService } from '@nestjs/terminus';
+import { TypeormHealthIndicator } from '@app/database/typeorm.health';
 
 @Controller()
 export class AppController {
-  constructor(private readonly appService: AppService) {}
+  constructor(
+    private health: HealthCheckService,
+    private db: TypeormHealthIndicator,
+  ) {}
 
-  @Get()
-  getHello(): string {
-    return this.appService.getHello();
+  @Get('health')
+  @HealthCheck()
+  getHello() {
+    return this.health.check([() => this.db.isHealthy('typeorm')]);
   }
 }

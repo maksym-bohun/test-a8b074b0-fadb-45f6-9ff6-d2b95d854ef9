@@ -1,10 +1,20 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
-import { AppService } from './app.service';
+import { TerminusModule } from '@nestjs/terminus';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import ormconfig from '../ormconfig';
+import { TypeormHealthIndicator } from '@app/database/typeorm.health';
+import { AppConfigModule } from '@app/configs/app-config.module';
 
 @Module({
-  imports: [],
+  imports: [
+    TerminusModule,
+    AppConfigModule,
+    TypeOrmModule.forRootAsync({
+      useFactory: async () => ormconfig,
+    }),
+  ],
+  providers: [TypeormHealthIndicator],
   controllers: [AppController],
-  providers: [AppService],
 })
 export class AppModule {}
