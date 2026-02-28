@@ -4,6 +4,7 @@ import { EntityManager } from 'typeorm';
 import { FetchReportsBodyDto } from '@app/modules/campaign-reports/dtos/fetch-reports-body.dto';
 import { CampaignReportsEntity } from '@app/modules/campaign-reports/db/campaign-reports.entity';
 import { TaskReportDto } from '@app/common/dtos/task-report.dto';
+import { AggregateReportQueryDto } from '@app/modules/campaign-reports/dtos/aggregate-reports-query.dto';
 
 @Injectable()
 export class CampaignReportsService {
@@ -56,5 +57,35 @@ export class CampaignReportsService {
     }
 
     return { success: true };
+  }
+
+  async getAggregatedReports(query: AggregateReportQueryDto) {
+    const { fromDate, toDate, eventName, take, page } = query;
+
+    const skip = (page - 1) * take;
+
+    // using queryBuilder because ".find" doesn't support groupBy
+    const rawResults = await this.manager
+      .createQueryBuilder(CampaignReportsEntity, 'cr')
+      .select('cr.adId', 'adId')
+      .addSelect('DATE(cr.eventTime)', 'date')
+      .addSelect('COUNT(*)', 'count')
+      .where('cr.eventName = :eventName', { eventName })
+      .andWhere('cr.eventTime BETWEEN :fromDate AND :toDate', {
+        fromDate,
+        toDate,
+      })
+      .groupBy('cr.adId')
+      .addGroupBy('DATE(cr.eventTime)')
+      .orderBy('DATE(cr.eventTime)', 'ASC')
+      .skip(skip)
+      .take(take)
+      .getRawMany();
+
+    return rawResults.map((r) => ({
+      adId: r.adId,
+      date: r.date,
+      count: Number(r.count),
+    }));
   }
 }

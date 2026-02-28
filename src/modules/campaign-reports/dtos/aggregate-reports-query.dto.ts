@@ -19,11 +19,11 @@ export class AggregateReportQueryDto {
   @IsOptional()
   @IsNumber()
   @Min(1)
-  take?: number;
+  take: number = 100;
 
   @ApiPropertyOptional({ default: 1, minimum: 1 })
   @IsOptional()
   @IsNumber()
   @Min(1)
-  page?: number;
+  page: number = 1;
 }
