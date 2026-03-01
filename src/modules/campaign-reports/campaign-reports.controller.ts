@@ -10,19 +10,12 @@ export class CampaignReportsController {
   ) {}
 
   @Post('fetch')
-  getCampaignReports(@Body() body: FetchReportsBodyDto) {
+  fetchAndSaveReports(@Body() body: FetchReportsBodyDto) {
     return this.campaignReportsService.fetchReports(body);
   }
 
   @Get('aggregate')
   aggregateReports(@Query() query: AggregateReportQueryDto) {
-    const take = query.take ?? 100;
-    const page = query.page ?? 1;
-
-    return this.campaignReportsService.getAggregatedReports({
-      ...query,
-      take,
-      page,
-    });
+    return this.campaignReportsService.getAggregatedReports(query);
   }
 }

@@ -5,6 +5,8 @@ import { FetchReportsBodyDto } from '@app/modules/campaign-reports/dtos/fetch-re
 import { CampaignReportsEntity } from '@app/modules/campaign-reports/db/campaign-reports.entity';
 import { TaskReportDto } from '@app/common/dtos/task-report.dto';
 import { AggregateReportQueryDto } from '@app/modules/campaign-reports/dtos/aggregate-reports-query.dto';
+import { EventNameEnum } from '@app/common/enums/event-name.enum';
+import { SuccessDto } from '@app/common/dtos/success.dto';
 
 @Injectable()
 export class CampaignReportsService {
@@ -13,50 +15,60 @@ export class CampaignReportsService {
     private readonly manager: EntityManager,
   ) {}
 
-  async fetchReports(body: FetchReportsBodyDto) {
-    const take = 500;
-    let installPage = 1;
-    let purchasePage = 1;
-    let hasMoreInstall = true;
-    let hasMorePurchase = true;
+  async fetchReports(body: FetchReportsBodyDto): Promise<SuccessDto> {
+    const { fromDate, toDate, take } = body;
 
-    const { fromDate, toDate } = body;
+    const pages: Record<EventNameEnum, number> = {
+      [EventNameEnum.INSTALL]: 1,
+      [EventNameEnum.PURCHASE]: 1,
+    };
 
-    while (hasMoreInstall || hasMorePurchase) {
-      let installRecords: TaskReportDto[] = [];
-      if (hasMoreInstall) {
-        installRecords =
-          await this.probationService.fetchInstallCampaignReports({
+    const hasMore: Record<EventNameEnum, boolean> = {
+      [EventNameEnum.INSTALL]: true,
+      [EventNameEnum.PURCHASE]: true,
+    };
+
+    while (Object.values(hasMore).some(Boolean)) {
+      const fetchPromises: Promise<TaskReportDto[]>[] = Object.entries(hasMore)
+        .filter(([_, more]) => more)
+        .map(([eventName]) => {
+          const page = pages[eventName as EventNameEnum];
+          const fetchFn =
+            eventName === EventNameEnum.INSTALL
+              ? this.probationService.fetchInstallCampaignReports
+              : this.probationService.fetchPurchaseCampaignReports;
+
+          return fetchFn.call(this.probationService, {
             fromDate,
             toDate,
-            page: installPage,
+            page,
             take,
           });
-        installPage++;
-        if (installRecords.length < take) hasMoreInstall = false;
+        });
+
+      const results = await Promise.all(fetchPromises);
+
+      const records: TaskReportDto[] = [];
+      let i = 0;
+      Object.entries(hasMore)
+        .filter(([_, more]) => more)
+        .forEach(([eventName]) => {
+          const fetched = results[i++];
+          records.push(...fetched);
+
+          pages[eventName as EventNameEnum]++;
+          if (fetched.length < take)
+            hasMore[eventName as EventNameEnum] = false;
+        });
+
+      if (records.length > 0) {
+        await this.manager.upsert(CampaignReportsEntity, records, {
+          conflictPaths: ['eventTime', 'clientId', 'eventName'],
+        });
       }
-
-      let purchaseRecords: TaskReportDto[] = [];
-      if (hasMorePurchase) {
-        purchaseRecords =
-          await this.probationService.fetchPurchaseCampaignReports({
-            fromDate,
-            toDate,
-            page: purchasePage,
-            take,
-          });
-        purchasePage++;
-        if (purchaseRecords.length < take) hasMorePurchase = false;
-      }
-
-      const records = [...installRecords, ...purchaseRecords];
-
-      await this.manager.upsert(CampaignReportsEntity, records, {
-        conflictPaths: ['eventTime', 'clientId', 'eventName'],
-      });
     }
 
-    return { success: true };
+    return new SuccessDto(true);
   }
 
   async getAggregatedReports(query: AggregateReportQueryDto) {
@@ -68,7 +80,7 @@ export class CampaignReportsService {
     const rawResults = await this.manager
       .createQueryBuilder(CampaignReportsEntity, 'cr')
       .select('cr.adId', 'adId')
-      .addSelect('DATE(cr.eventTime)', 'date')
+      .addSelect("DATE_TRUNC('second', cr.eventTime)", 'date')
       .addSelect('COUNT(*)', 'count')
       .where('cr.eventName = :eventName', { eventName })
       .andWhere('cr.eventTime BETWEEN :fromDate AND :toDate', {
@@ -76,8 +88,8 @@ export class CampaignReportsService {
         toDate,
       })
       .groupBy('cr.adId')
-      .addGroupBy('DATE(cr.eventTime)')
-      .orderBy('DATE(cr.eventTime)', 'ASC')
+      .addGroupBy("DATE_TRUNC('second', cr.eventTime)")
+      .orderBy("DATE_TRUNC('second', cr.eventTime)", 'ASC')
       .skip(skip)
       .take(take)
       .getRawMany();

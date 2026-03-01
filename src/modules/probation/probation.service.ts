@@ -60,14 +60,19 @@ export class ProbationService {
       }),
     );
 
-    const csv = response.data?.data?.csv;
+    const csvString = response.data?.data?.csv;
+    if (!csvString) return [];
 
-    const records = parse(csv, {
+    const parsedReports = parse(csvString, {
       columns: true,
       skip_empty_lines: true,
     }) as IProbationTaskReport[];
 
-    return records.map((r) => ({
+    return parsedReports.map(this.mapToTaskReportDto);
+  }
+
+  private mapToTaskReportDto(r: IProbationTaskReport): TaskReportDto {
+    return {
       campaign: r.campaign,
       campaignId: r.campaign_id,
       adgroup: r.adgroup,
@@ -77,6 +82,6 @@ export class ProbationService {
       clientId: r.client_id,
       eventName: r.event_name,
       eventTime: new Date(r.event_time),
-    })) as TaskReportDto[];
+    };
   }
 }

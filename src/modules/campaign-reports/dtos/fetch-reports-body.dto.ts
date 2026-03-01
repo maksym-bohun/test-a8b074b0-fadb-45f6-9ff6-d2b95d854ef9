@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString } from 'class-validator';
+import { IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class FetchReportsBodyDto {
   @ApiProperty()
@@ -9,4 +9,9 @@ export class FetchReportsBodyDto {
   @ApiProperty()
   @IsString()
   toDate: string;
+
+  @ApiProperty({ default: 500 })
+  @IsOptional()
+  @IsNumber()
+  take: number = 500;
 }

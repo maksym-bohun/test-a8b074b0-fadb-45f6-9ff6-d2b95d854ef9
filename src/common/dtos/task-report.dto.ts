@@ -33,4 +33,8 @@ export class TaskReportDto {
   @ApiProperty()
   @IsDateString()
   eventTime: Date;
+
+  @ApiProperty()
+  @IsString()
+  eventName: string;
 }
